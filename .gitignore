@@ -1,0 +1,6 @@
+.vscode/
+Image_Database.zip
+Image_Database/
+__pycache__/
+adaptive_quantization.py
+peppers.bin
