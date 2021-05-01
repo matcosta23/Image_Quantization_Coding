@@ -1,16 +1,13 @@
 import os
 import math
+import itertools
 import numpy as np
 
 from abc import ABC, abstractmethod
 from PIL import Image
 from bitstring import BitStream
-from scipy.stats import multivariate_normal as mvn
 from sklearn.cluster import KMeans
 
-
-
-""" __________ Abstract Class __________  """
 
 
 class LossyCompression(ABC):
@@ -62,12 +59,13 @@ class LossyCompression(ABC):
             bin_file.write(self.bitstring.bin.encode())
             bin_file.close()
 
+
     # TODO: Add method to decoding class
-    def _read_binary_file(self, input_file_path):
-        ##### Read binary file and write bitstring.
-        with open(input_file_path) as bin_file:
-            bitstring = bin_file.read()
-            self.bitstring = BitStream(f'0b{bitstring}')
+    # def _read_binary_file(self, input_file_path):
+    #     ##### Read binary file and write bitstring.
+    #     with open(input_file_path) as bin_file:
+    #         bitstring = bin_file.read()
+    #         self.bitstring = BitStream(f'0b{bitstring}')
 
 
     @abstractmethod
@@ -81,8 +79,6 @@ class LossyCompression(ABC):
     #     pass
 
 
-
-""" __________ Inherited Classes __________  """
 
 class CIQA_Encoder(LossyCompression):
 
@@ -160,12 +156,8 @@ class CIVQ_Encoder(LossyCompression):
 
 
     def _write_bitstring(self):
-        ##### Write information about patch size and quantization levels.
-        # NOTE: The available patch dimensions are 2x2, 4x4, 8x8 and 16x16
-        # NOTE: The available codebook sizes are 32, 64, 128 and 256
-        block_size_flag = int(math.log2(self.N) - 1)
-        codebook_size_flag = int(math.log2(self.M) - 5)
-        self.bitstring = BitStream(f'uint:2={block_size_flag}, uint:2={codebook_size_flag}')
+        ##### Instantiate bitstring and write hyper-parameters.
+        self._instantiate_bitstring()
 
         ##### Write codebook on bitstring
         flatten_codevectors = np.round(self.codebook.flatten()).astype(np.uint8)
@@ -177,6 +169,16 @@ class CIVQ_Encoder(LossyCompression):
         for index in self.indexes:
             self.bitstring.append(f'uint:{index_bits_amount}={index}')
 
+        return
+
+
+    def _instantiate_bitstring(self):
+        ##### Write information about patch size and quantization levels.
+        # NOTE: The available patch dimensions are 2x2, 4x4, 8x8 and 16x16
+        # NOTE: The available codebook sizes are 32, 64, 128 and 256
+        block_size_flag = int(math.log2(self.N) - 1)
+        codebook_size_flag = int(math.log2(self.M) - 5)
+        self.bitstring = BitStream(f'uint:2={block_size_flag}, uint:2={codebook_size_flag}')
         return
 
 
@@ -198,9 +200,123 @@ class CIVQ_Encoder(LossyCompression):
     #     return
 
 
+
+class CIMap_Encoder(CIVQ_Encoder):
+
+    def __init__(self, image_file_path, binary_file_path, M):
+        ##### Call parent constructor without 'N' parameter.
+        super().__init__(image_file_path, binary_file_path, None, M)
+        return
+
+
+    def _separate_blocks(self, image_file_path):
+        ##### Read Image and use colors as blocks
+        pil_image = Image.open(image_file_path)
+        self.patches = np.asarray(pil_image)
+        return
+
+
+    def _instantiate_bitstring(self):
+        ##### Write information about codebook length.
+        # NOTE: The available codebook sizes are 16, 32, 64, 128 and 256.
+        codebook_size_flag = int(math.log2(self.M) - 4)
+        self.bitstring = BitStream(f'uint:3={codebook_size_flag}')
+        return
+
+
+
+class Dithering_Quantizer():
+
+    def __init__(self, image_file_path, levels=8):
+        ##### Save quantization precision
+        self.levels = levels
+        ##### Read input image
+        self.image = np.asarray(Image.open(image_file_path)).astype(np.int32)
+        return
+
+    
+    def evaluate_filtering(self):
+        self._quantize_image()
+        self._floyd_steinberg_filtering()
+        self._display_PSNR()
+        self._save_both_versions()
+
+
+    def _quantize_image(self):
+        ##### Verify if image has one or three channels
+        if len(self.image.shape) == 2:
+            greenscale = True
+            self.image = np.expand_dims(self.image, axis=2)
+        else: 
+            greenscale = False
+
+        ##### Create quantization levels
+        if greenscale:
+            # Greenscale images have self.levels options of equally spaced grey scales.
+            self.quantization_levels = np.expand_dims(np.linspace(0, 255, num=self.levels, dtype=np.uint8), axis=1)
+        else:
+            # NOTE: For colorful images, only 8 and 16 levels are available.
+            pixel_values = np.linspace(0, 255, num=self.levels//4, dtype=np.uint8)
+            self.quantization_levels = self._get_possible_combinations(3, pixel_values[0], pixel_values[-1])
+            if self.levels == 16:
+                self.quantization_levels = np.vstack([self.quantization_levels, self._get_possible_combinations(3, *pixel_values[1:3])])
+
+        ##### Flatten input image.
+        #flattened_image = np.reshape(self.image, (np.prod(self.image.shape[:2]), self.image.shape[-1]))
+        ##### Expand flattened image dimensions
+        exp_image = np.repeat(np.expand_dims(self.image, axis=2), self.levels, axis=2)
+        ##### Compute Euclidean distance
+        euclidean_dist = np.linalg.norm(np.subtract(exp_image, self.quantization_levels), axis=3)
+        ##### Get quantization indexes
+        indexes = np.argsort(euclidean_dist)[:, :, 0]
+        ##### Get quantized image
+        self.quantized_image = np.squeeze(self.quantization_levels[indexes])
+
+        return
+
+
+    def _floyd_steinberg_filtering(self):
+        ##### Get image dimensions
+        height, width = self.image.shape[:2]
+        ##### Create filtered image
+        self.filtered = self.image.astype(np.int32)
+        ##### Iterate over all every pixel and spread noise.
+        for v in range(height):
+            for h in range(width):
+                ##### Quantize pixel
+                previous_pixel = self.filtered[v, h].copy()
+                self.filtered[v, h] = self.quantization_levels[np.argsort(np.linalg.norm(previous_pixel - self.quantization_levels, axis=1))[0]]
+                quantization_error = previous_pixel - self.filtered[v, h]
+                ##### Spread error
+                try: self.filtered[v, h + 1]     += np.around(quantization_error * 7/16).astype(np.int32)
+                except IndexError: pass
+                try: self.filtered[v + 1, h - 1] += np.around(quantization_error * 3/16 * (h - 1 >= 0)).astype(np.int32)
+                except IndexError: pass
+                try: self.filtered[v + 1, h]     += np.around(quantization_error * 5/16).astype(np.int32)
+                except IndexError: pass
+                try: self.filtered[v + 1, h + 1] += np.around(quantization_error * 1/16).astype(np.int32)
+                except IndexError: pass
+
+        return
+
+    
+    def _get_possible_combinations(self, lists_lengths, v1, v2):
+        combinations = []
+
+        for v2_amounts in range(lists_lengths + 1):
+            for combination in itertools.combinations(range(lists_lengths), v2_amounts):
+                comb_list = np.full(lists_lengths, v1)
+                comb_list[list(combination)] = v2
+                combinations.append(comb_list)
+
+        return np.array(combinations)
+
+
 ########## Main Code
 
-file_name = "Image_Database/peppers.bmp"
-output_name = "peppers.bin"
-encoder = CIQA_Encoder(file_name, output_name, 8, 16)
-encoder.encode_image()
+file_name = "Image_Database/kodim03.png"
+output_name = "kodim03.bin"
+# encoder = CIMap_Encoder(file_name, output_name, 16)
+# encoder.encode_image()
+model  = Dithering_Quantizer(file_name, 8)
+model.evaluate_filtering()
