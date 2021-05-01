@@ -25,8 +25,12 @@ class LossyCompression(ABC):
     def encode_image(self):
         pass
 
-    
-    # TODO: Add method to decoding class
+
+    @abstractmethod
+    def decode_image(self):
+        pass
+
+
     # @abstractmethod
     # def decode_binary(self):
     #     pass
@@ -59,17 +63,22 @@ class LossyCompression(ABC):
         return
 
 
-    # TODO: Add method to decoding class
-    # def _read_binary_file(self, input_file_path):
-    #     ##### Read binary file and write bitstring.
-    #     with open(input_file_path) as bin_file:
-    #         bitstring = bin_file.read()
-    #         self.bitstring = BitStream(f'0b{bitstring}')
-
-
     @abstractmethod
     def _write_bitstring(self):
         pass
+
+
+    def _get_bitstring(self):
+        ##### Verify if bitstring is already instantiated.
+        try:
+            bitstring_exists = isinstance(self.bitstring, BitStream)
+        except AttributeError:
+            bitstring_exists = False 
+        ##### Read binary file and write bitstring.
+        if bitstring_exists is False:
+            with open(self.binary_file_path) as bin_file:
+                bitstring = bin_file.read()
+                self.bitstring = BitStream(f'0b{bitstring}')
 
 
     # TODO: Add method to decoding class

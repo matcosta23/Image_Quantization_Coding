@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from PIL import Image 
 from bitstring import BitStream
 
 import common_classes
@@ -15,6 +16,13 @@ class CIQA(common_classes.LossyCompression):
         ##### Instantiate and write bitstring
         self._write_bitstring()
         return
+
+
+    def decode_image(self):
+        ##### Obtain bitstring
+        self._get_bitstring()
+        ##### Read header and decode bitstring.
+        self._read_coefficientes()
 
 
     def _compute_coefficients(self):
@@ -39,8 +47,10 @@ class CIQA(common_classes.LossyCompression):
 
     def _write_bitstring(self):
         ##### Write information about patch size and quantization levels.
+        # The first is the difference between width and height: 
         # NOTE: The maximum patch dimension is 32, while the maximum quantization level is 16.
-        self.bitstring = BitStream(f'uint:5={self.N - 1}, uint:4={self.M - 1}')
+        self.bitstring = BitStream(f'int:7={self.patches.shape[1] - self.patches.shape[0]}, '
+                                   f'uint:5={self.N - 1}, uint:4={self.M - 1}')
         
         ##### Write patch coefficients into the bitstring.
         bits_for_quantized_values = int(np.ceil(math.log2(self.M)))
@@ -53,7 +63,41 @@ class CIQA(common_classes.LossyCompression):
         return
 
 
+    def _read_coefficientes(self):
+        ##### Read header
+        patches_diff, self.N, self.M = self.bitstring.readlist(f'int:7, uint:5, uint:4')
+        self.N += 1
+        self.M += 1
+        ##### Obtain image dimensions
+        bits_for_quantized_values = int(np.ceil(math.log2(self.M)))
+        bits_per_patch = 2 * 8 + np.ceil(math.log2(self.M)) * self.N**2
+        patches_amount = len(self.bitstring.bin.__str__()[16:]) / bits_per_patch
+        second_degree_coeff = [1, np.abs(patches_diff), -patches_amount]
+        vertical_patches = int(np.around(np.roots(second_degree_coeff).max(), 0))
+        horizontal_patches = vertical_patches + patches_diff
+        image_shape = np.array([vertical_patches, horizontal_patches]) * self.N
+        ##### Decode patches
+        self.quantized_image = np.zeros(image_shape)
+        for v in range(vertical_patches):
+            for h in range(horizontal_patches):
+                ##### Get index mapping within a patch
+                min_value, max_value = self.bitstring.readlist(f'uint:8, uint:8')
+                index_mapping = np.linspace(min_value, max_value, num=self.M)
+                ##### Read index
+                indexes = np.reshape(list(\
+                    map(lambda pixel_idx: self.bitstring.read(f'uint:{bits_for_quantized_values}'), range(self.N**2))), \
+                        (self.N, self.N))
+                ##### Decode and store patch.
+                reconstructed_patch = index_mapping[indexes]
+                self.quantized_image[v * self.N: (v + 1) * self.N, h * self.N: (h + 1) * self.N] = reconstructed_patch
+        ##### Cast patch to uint8.
+        self.quantized_image = self.quantized_image.astype(np.uint8)
+        return
+
+
+
 file_name = "Image_Database/lena.bmp"
 output_name = "lena.bin"
-encoder = CIQA(file_name, output_name, N=8, M=8)
-encoder.encode_image()
+adaptive = CIQA(file_name, output_name, N=8, M=8)
+adaptive.encode_image()
+adaptive.decode_image()
