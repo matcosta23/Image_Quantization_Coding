@@ -18,7 +18,7 @@ class CIQA(common_classes.LossyCompression):
         return
 
 
-    def decode_image(self):
+    def decode_binary(self):
         ##### Obtain bitstring
         self._get_bitstring()
         ##### Read header and decode bitstring.
@@ -72,10 +72,8 @@ class CIQA(common_classes.LossyCompression):
         bits_for_quantized_values = int(np.ceil(math.log2(self.M)))
         bits_per_patch = 2 * 8 + np.ceil(math.log2(self.M)) * self.N**2
         patches_amount = len(self.bitstring.bin.__str__()[16:]) / bits_per_patch
-        second_degree_coeff = [1, np.abs(patches_diff), -patches_amount]
-        vertical_patches = int(np.around(np.roots(second_degree_coeff).max(), 0))
-        horizontal_patches = vertical_patches + patches_diff
-        image_shape = np.array([vertical_patches, horizontal_patches]) * self.N
+        patches_shape = self._compute_dimensions(patches_diff, patches_amount)
+        image_shape = patches_shape * self.N
         ##### Decode patches
         self.quantized_image = np.zeros(image_shape)
         for v in range(vertical_patches):
@@ -100,4 +98,4 @@ file_name = "Image_Database/lena.bmp"
 output_name = "lena.bin"
 adaptive = CIQA(file_name, output_name, N=8, M=8)
 adaptive.encode_image()
-adaptive.decode_image()
+adaptive.decode_binary()

@@ -27,13 +27,8 @@ class LossyCompression(ABC):
 
 
     @abstractmethod
-    def decode_image(self):
+    def decode_binary(self):
         pass
-
-
-    # @abstractmethod
-    # def decode_binary(self):
-    #     pass
 
 
     def save_binary_file(self):
@@ -81,11 +76,13 @@ class LossyCompression(ABC):
                 self.bitstring = BitStream(f'0b{bitstring}')
 
 
-    # TODO: Add method to decoding class
-    # @abstractmethod
-    # def _read_bitstring(self):
-    #     pass
-    
+    def _compute_dimensions(self, dims_diff, n_elements):
+        second_degree_coeff = [1, np.abs(dims_diff), -n_elements]
+        vertical = int(np.around(np.roots(second_degree_coeff).max(), 0))
+        horizontal = vertical + dims_diff
+        return np.array([vertical, horizontal])
+
+        
     
     ########## Auxiliary Methods ##########
 
