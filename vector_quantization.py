@@ -64,12 +64,12 @@ class CIVQ(common_classes.LossyCompression):
         self._read_bitstring_header()
         ##### Read codebook
         coefficients = []
-        for i in range(self.M * self.N**2):
+        for i in range(self.M * self.block_length):
             coefficients.append(self.bitstring.read('uint:8'))
-        self.codebook = np.reshape(np.array(coefficients), (self.M, self.N**2))
+        self.codebook = np.reshape(np.array(coefficients), (self.M, self.block_length))
         ##### Read indexes
         index_bits_amount = int(math.log2(self.M))
-        bits_before_indexes = 11 + self.M * self.N**2 * 8
+        bits_before_indexes = self.bits_in_header + self.M * self.block_length * 8
         indexes_amount = int(len(self.bitstring.bin.__str__()[bits_before_indexes:]) / index_bits_amount)
         self.indexes = np.array(list(map(lambda idx: self.bitstring.read(f'uint:{index_bits_amount}'), range(indexes_amount))))
         return
@@ -94,22 +94,29 @@ class CIVQ(common_classes.LossyCompression):
         codebook_size = self.bitstring.read('uint:2')
         self.N = 2**(block_size + 1)
         self.M = 2**(codebook_size + 5)
+        self.block_length = self.N**2
+        self.bits_in_header = 7 + 2 + 2
         return
 
 
     def _reconstruct_image(self):
         ##### Obtain dimensions
-        patch_dims = self._compute_dimensions(self.patch_dims_diff, len(self.indexes))
-        img_dims = patch_dims * self.N
+        self.patch_dims = self._compute_dimensions(self.patch_dims_diff, len(self.indexes))
+        self.img_dims = self.patch_dims * self.N
         ##### Arange index in the associated patch position.
-        self.indexes = np.reshape(self.indexes, patch_dims)
+        self.indexes = np.reshape(self.indexes, self.patch_dims)
         ##### Map index from codebook
-        flattened_patches = self.codebook[self.indexes]
+        self.flattened_patches = self.codebook[self.indexes]
         ##### Reshape and cast
-        patches = np.reshape(flattened_patches, (*patch_dims, self.N, self.N))
+        self._build_image_from_patches()
+        return
+
+
+    def _build_image_from_patches(self):
+        patches = np.reshape(self.flattened_patches, (*self.patch_dims, self.N, self.N))
         self.quantized_image = np.zeros(img_dims).astype(np.uint8)
-        for v in range(patch_dims[0]):
-            for h in range(patch_dims[1]):
+        for v in range(self.patch_dims[0]):
+            for h in range(self.patch_dims[1]):
                 self.quantized_image[v * self.N: (v + 1) * self.N, h * self.N: (h + 1) * self.N] = patches[v, h]
         return
 
