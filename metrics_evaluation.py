@@ -15,21 +15,35 @@ class Distortion_Evaluation():
         return
 
 
-    def display_comparison(self, original, reconstructed, bitstring, quantizer_id):
+    def display_comparison(self, original, reconstructed_versions, bitstring, quantizer_id, rec_titles=None):
+        ##### Create titles
+        if rec_titles is None:
+            rec_titles = [""] * len(reconstructed_versions)
         ##### Compute PSNR between image versions
-        psnr = self.psnr(original.astype(np.int32), reconstructed.astype(np.int32))
+        psnr = list(map(lambda rec_version: self.psnr(original.astype(np.int32), rec_version.astype(np.int32)), reconstructed_versions))
+        ##### Add PSNR to titles
+        titles = list(map(lambda old_title, psnr_value: old_title + f"PSNR: {psnr_value:.2f}dB", rec_titles, psnr))
         ##### Compute bpp
-        bpp = self.bpp(original, bitstring)
-
+        if bitstring is not None:
+            bpp = list(map(lambda bs: self.bpp(original, bs), bitstring))
+            titles = list(map(lambda old_title, bpp_value: old_title + f"; BPP: {bpp_value:.2f}", titles, bpp))
+        ##### Update axes title font size.
+        parameters = {'axes.titlesize': 10}
+        plt.rcParams.update(parameters)
         ##### Plot comparison
-        fig, axs = plt.subplots(1, 2)
-        fig.suptitle(f'{quantizer_id}: {psnr:.2f}dB', fontsize=16)
+        fig, axs = plt.subplots(1, len(reconstructed_versions) + 1)
+        fig.suptitle(f'{quantizer_id}', fontsize=16)
         cmap = "gray" if len(original.shape) == 2 else 'viridis'
         axs[0].imshow(original, cmap=cmap)
         axs[0].set_title('Original Image.')
-        axs[1].imshow(reconstructed, cmap=cmap)
-        axs[1].set_title(f'Quantized with {bpp:.2f}bpp.')
-
+        axs[0].set_yticklabels([])
+        axs[0].set_xticklabels([])
+        for idx in range(len(reconstructed_versions)):
+            axs[idx + 1].imshow(reconstructed_versions[idx] , cmap=cmap)
+            axs[idx + 1].set_title(titles[idx])
+            axs[idx + 1].set_yticklabels([])
+            axs[idx + 1].set_xticklabels([])
+        plt.tight_layout()
         plt.show()
         return
 
@@ -69,7 +83,7 @@ class Distortion_Evaluation():
         plt.ylabel("MSE")
         ##### Define legend
         legends = list(map(lambda parameters: f"N={int(parameters[0])}; M={int(parameters[1])}", sorted_results[:, 2:]))
-        plt.legend(scatters, legends, ncol=4, fontsize=8)
+        plt.legend(scatters, legends, ncol=3, fontsize=7)
         ##### Plot lower convex hull
         # plt.plot(sorted_results[convex_hull_indexes, 1], sorted_results[convex_hull_indexes, 0], color='r')
         ##### Plot Image

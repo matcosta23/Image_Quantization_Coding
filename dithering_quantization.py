@@ -1,6 +1,11 @@
+import os
+import sys
+import argparse
 import itertools
 import numpy as np
 from PIL import Image
+
+from metrics_evaluation import Distortion_Evaluation
 
 
 class Dithering_Quantizer():
@@ -92,7 +97,41 @@ class Dithering_Quantizer():
 
 
 if __name__ == "__main__":
-    file_name = "Image_Database/kodim03.png"
-    output_name = "kodim03.bin"
-    model = Dithering_Quantizer(file_name, levels=8)
-    model.evaluate_filtering()
+    ##### Define parser
+    parser = argparse.ArgumentParser(description="Receives arguments for evaluation of the Floyd-Steiberg algorithm.")
+    ##### Define arguments.
+    parser.add_argument('--image_to_quantize', required=True, help='Path to original image.')
+    parser.add_argument('-s', '--save_results', action='store_true', help='If set, results are saved on output paths.')
+    parser.add_argument('--levels', default=8, type=int, help="Levels in uniform quantization.")
+    parser.add_argument('--uniform_folder', required=False, help='Folder to save images uniformly quantized. '
+                                                                  "Only used if '-s' flag is set.")
+    parser.add_argument('--dithering_folder', required=False, help='Folder to save dithering images. '
+                                                                   "Only used if '-s' flag is set.")
+    ##### Return namespace.
+    args = parser.parse_args(sys.argv[1:])
+    ##### Evaluete Dithering
+    floyd_steinberg_filter = Dithering_Quantizer(args.image_to_quantize, levels=8)
+    floyd_steinberg_filter.evaluate_filtering()
+    ##### Create folders, define output paths and save files. 
+    if args.save_results:
+        # Uniform Quantization
+        if args.uniform_folder is None: 
+            args.uniform_folder = "Uniform_Quantization"
+        if not args.uniform_folder.exists():
+            args.uniform_folder.mkdir(parents=True)
+        uniform_img_path = os.path.join(args.uniform_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_uniform.png')
+        pil_img = Image.fromarray(floyd_steinberg_filter.quantized_image)
+        pil_img.save(uniform_img_path)
+        # Dithering Image
+        if args.dithering_folder is None:
+            args.dithering_folder = "Dithering_Images"
+        if not args.dithering_folder.exists():
+            args.dithering_folder.mkdir(parents=True)
+        dithering_img_path = os.path.join(args.dithering_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_dithering.png')
+        pil_img = Image.fromarray(floyd_steinberg_filter.filtered)
+        pil_img.save(dithering_img_path)
+    ##### Plot results
+    distortion_meter = Distortion_Evaluation()
+    distortion_meter.display_comparison(floyd_steinberg_filter.image, 
+                                       [floyd_steinberg_filter.quantized_image, floyd_steinberg_filter.filtered], 
+                                       None, "Floyd Steinberg Dithering", ["Uniform: ", "Dithering: "])

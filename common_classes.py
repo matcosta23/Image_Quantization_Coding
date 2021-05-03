@@ -146,7 +146,7 @@ def evaluate_one_point(args, ModelClass, model_id):
         quantizer.save_quantized_image()
     # Display image comparison
     distortion_meter = Distortion_Evaluation()
-    distortion_meter.display_comparison(quantizer.image, quantizer.quantized_image, quantizer.bitstring, model_id)
+    distortion_meter.display_comparison(quantizer.image, [quantizer.quantized_image], [quantizer.bitstring], model_id)
     return
 
 
