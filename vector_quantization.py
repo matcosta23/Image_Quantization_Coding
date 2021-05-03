@@ -1,3 +1,4 @@
+import os
 import math
 import numpy as np
 from PIL import Image
@@ -5,6 +6,7 @@ from bitstring import BitStream
 from sklearn.cluster import KMeans
 
 import common_classes
+#from metrics_evaluation import Distortion_Evaluation
 
 
 class CIVQ(common_classes.LossyCompression):
@@ -114,7 +116,7 @@ class CIVQ(common_classes.LossyCompression):
 
     def _build_image_from_patches(self):
         patches = np.reshape(self.flattened_patches, (*self.patch_dims, self.N, self.N))
-        self.quantized_image = np.zeros(img_dims).astype(np.uint8)
+        self.quantized_image = np.zeros(self.img_dims).astype(np.uint8)
         for v in range(self.patch_dims[0]):
             for h in range(self.patch_dims[1]):
                 self.quantized_image[v * self.N: (v + 1) * self.N, h * self.N: (h + 1) * self.N] = patches[v, h]
@@ -123,8 +125,22 @@ class CIVQ(common_classes.LossyCompression):
 
 
 if __name__ == "__main__":
-    file_name = "Image_Database/lena.bmp"
-    output_name = "lena.bin"
-    vq = CIVQ(file_name, output_name, N=2, M=32)
-    vq.encode_image()
-    vq.decode_binary()
+    ##### Read arguments from command line
+    args = common_classes.read_arguments()
+    ##### Create directories
+    args.binaries_folder, args.quantized_folder = common_classes.create_folders(args.binaries_folder, args.quantized_folder, "Vector", args.save_results)
+    ##### Define possible parameters
+    N_values = np.array([2, 4, 8, 16])
+    M_values = np.array([32, 64, 128, 256])
+    ##### Verify if multiple or single points should be executed
+    if args.global_evaluation is False:
+        # Verify if hyper-parameters are ok
+        if args.N not in N_values:
+            raise ValueError(f"The block dimension 'N' must be one of these values: {list(N_values)}")
+        if args.M not in M_values:
+            raise ValueError(f"The codebook length 'M' must be one of these values: {list(M_values)}")
+        # Evaluate point
+        common_classes.evaluate_one_point(args, CIVQ, "Vector Quantizer")
+    else:
+        ##### Global evaluation.
+        common_classes.global_evaluation(args, N_values, M_values, CIVQ, "Vector Quantizer")

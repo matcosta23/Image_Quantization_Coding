@@ -7,7 +7,7 @@ import matplotlib.colors as mcolors
 from bitstring import BitStream
 
 
-class PSNR_Evaluation():
+class Distortion_Evaluation():
 
     def __init__(self):
         ##### Attribute for saving computed results
@@ -24,10 +24,10 @@ class PSNR_Evaluation():
         ##### Plot comparison
         fig, axs = plt.subplots(1, 2)
         fig.suptitle(f'{quantizer_id}: {psnr:.2f}dB', fontsize=16)
-
-        axs[0].imshow(original, cmap="gray")
+        cmap = "gray" if len(original.shape) == 2 else 'viridis'
+        axs[0].imshow(original, cmap=cmap)
         axs[0].set_title('Original Image.')
-        axs[1].imshow(reconstructed, cmap="gray")
+        axs[1].imshow(reconstructed, cmap=cmap)
         axs[1].set_title(f'Quantized with {bpp:.2f}bpp.')
 
         plt.show()
@@ -51,7 +51,9 @@ class PSNR_Evaluation():
         # Get values in the hull.
         convex_hull_indexes = [True] + list(map(lambda idx: np.all(sorted_results[idx, 0] < sorted_results[:idx, 0]), range(1, len(sorted_results))))
         ##### Plot scatter plot cloud.
-        used_colors = [random.choice(list(mcolors.CSS4_COLORS.items()))[0]]
+        colors_dict = {**mcolors.BASE_COLORS, **mcolors.TABLEAU_COLORS}
+        colors_dict.pop('w')
+        used_colors = [random.choice(list(colors_dict.items()))[0]]
         scatters = []
         for mse, bpp in sorted_results[:, :2]:
             # Add point to scatter plot
@@ -69,7 +71,7 @@ class PSNR_Evaluation():
         legends = list(map(lambda parameters: f"N={int(parameters[0])}; M={int(parameters[1])}", sorted_results[:, 2:]))
         plt.legend(scatters, legends, ncol=4, fontsize=8)
         ##### Plot lower convex hull
-        plt.plot(sorted_results[convex_hull_indexes, 1], sorted_results[convex_hull_indexes, 0], color='r')
+        # plt.plot(sorted_results[convex_hull_indexes, 1], sorted_results[convex_hull_indexes, 0], color='r')
         ##### Plot Image
         plt.show()
         return
