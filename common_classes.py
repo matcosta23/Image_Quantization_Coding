@@ -1,4 +1,6 @@
 import os
+import sys
+import argparse
 import numpy as np
 
 from abc import ABC, abstractmethod
@@ -6,6 +8,7 @@ from PIL import Image
 from bitstring import BitStream
 
 
+""" Parent Class """
 
 class LossyCompression(ABC):
 
@@ -35,6 +38,13 @@ class LossyCompression(ABC):
         with open(self.binary_file_path, "wb") as bin_file:
             bin_file.write(self.bitstring.bin.encode())
             bin_file.close()
+        return
+
+
+    def save_quantized_image(self):
+        pil_img = Image.fromarray(self.quantized_image)
+        pil_img.save(self.rec_image_file_path)
+        return
 
 
     ########## Private Methods ##########
@@ -42,12 +52,12 @@ class LossyCompression(ABC):
     def _separate_blocks(self):
         ##### Read Image
         pil_image = Image.open(self.image_file_path)
-        image = np.asarray(pil_image)
+        self.image = np.asarray(pil_image)
 
         ##### Verify shapes and pad image
-        bottom_padding = 0 if image.shape[0] % self.N == 0 else self.N - image.shape[0] % self.N
-        right_padding = 0 if image.shape[1] % self.N == 0 else self.N - image.shape[1] % self.N
-        padded_image = np.pad(image, ((0, bottom_padding), (0, right_padding)), 'edge')
+        bottom_padding = 0 if self.image.shape[0] % self.N == 0 else self.N - self.image.shape[0] % self.N
+        right_padding = 0 if self.image.shape[1] % self.N == 0 else self.N - self.image.shape[1] % self.N
+        padded_image = np.pad(self.image, ((0, bottom_padding), (0, right_padding)), 'edge')
         
         ##### Split array into patches
         rows_of_patches = np.vsplit(padded_image, padded_image.shape[0] // self.N)
@@ -83,8 +93,39 @@ class LossyCompression(ABC):
         return np.array([vertical, horizontal])
 
         
-    
-    ########## Auxiliary Methods ##########
+""" Auxiliary Functions """
+
+def read_arguments():
+    ##### Define parser
+    parser = argparse.ArgumentParser(description="Receives arguments for quantization.")
+    ##### Define arguments.
+    parser.add_argument('--image_to_quantize', required=True, help='Path to original image.')
+    parser.add_argument('-g', '--global_evaluation', action='store_true', help='If set, all hyper-parameter combinations are compared.')
+    parser.add_argument('-s', '--save_results', action='store_true', help='If set, results are saved on output paths.')
+    parser.add_argument('--M', required=True, type=int, help="Value for M hyper-parameter.")
+    parser.add_argument('--N', required=False, type=int, help="Value for N hyper-parameter.")
+    parser.add_argument('--binaries_folder', required=False, help='Folder to save binaries. '
+                                                                  "Only used if '-s' flag is set.")
+    parser.add_argument('--quantized_folder', required=False, help='Folder to save quantized images. '
+                                                                   "Only used if '-s' flag is set.")
+    ##### Return namespace.
+    return parser.parse_args(sys.argv[1:])
+
+
+
+def create_folders(binaries_folder, quantized_folder, quantizer_id, save_results):
+    ##### Verify if user has provided destiny folders.
+    if binaries_folder is None: 
+        binaries_folder = "Binaries_" + quantizer_id
+    if quantized_folder is None:
+        quantized_folder = "Quantized_" + quantizer_id
+    ##### Create folders
+    if save_results:
+        if not binaries_folder.exists():
+            binaries_folder.mkdir(parents=True)
+        if not quantized_folder.exists():
+            quantized_folder.mkdir(parents=True)
+    return binaries_folder, quantized_folder
 
 
 

@@ -1,9 +1,11 @@
+import os
 import math
 import numpy as np
 from PIL import Image 
 from bitstring import BitStream
 
 import common_classes
+from metrics_evaluation import PSNR_Evaluation
 
 
 class CIQA(common_classes.LossyCompression):
@@ -35,7 +37,7 @@ class CIQA(common_classes.LossyCompression):
 
         ##### Quantize patches
         normalized_patches = self.patches - min_values
-        quantized_patches = np.clip(np.floor(normalized_patches / deltas), 0, 7)
+        quantized_patches = np.clip(np.floor(normalized_patches / deltas), 0, self.M - 1)
 
         ##### Stack information to be sent to the decoder and reshape them.
         info_to_be_sent = np.concatenate((min_values, max_values, quantized_patches), axis=2)
@@ -76,8 +78,8 @@ class CIQA(common_classes.LossyCompression):
         image_shape = patches_shape * self.N
         ##### Decode patches
         self.quantized_image = np.zeros(image_shape)
-        for v in range(vertical_patches):
-            for h in range(horizontal_patches):
+        for v in range(patches_shape[0]):
+            for h in range(patches_shape[1]):
                 ##### Get index mapping within a patch
                 min_value, max_value = self.bitstring.readlist(f'uint:8, uint:8')
                 index_mapping = np.linspace(min_value, max_value, num=self.M)
@@ -94,8 +96,53 @@ class CIQA(common_classes.LossyCompression):
 
 
 
-file_name = "Image_Database/lena.bmp"
-output_name = "lena.bin"
-adaptive = CIQA(file_name, output_name, N=8, M=8)
-adaptive.encode_image()
-adaptive.decode_binary()
+if __name__ == "__main__":
+    ##### Read arguments from command line
+    args = common_classes.read_arguments()
+    ##### Create directories
+    args.binaries_folder, args.quantized_folder = common_classes.create_folders(args.binaries_folder, args.quantized_folder, "Adaptive", args.save_results)
+    ##### Verify hyper-parameters values
+    if args.M > 16:
+        raise ValueError("Quantization supports only up to 16 levels (M parameter).")
+    if args.N > 32:
+        raise ValueError("The maximum dimension for the square block is 32 pixels (N parameter).")
+    ##### Verify if only one or all points should be runned.
+    if args.global_evaluation is False:
+        # Define output paths
+        binary_file_path    = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '.bin')
+        rec_image_file_path = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_rec.png')
+        # Instantiate Model
+        adaptive_quantizer = CIQA(args.image_to_quantize, binary_file_path, rec_image_file_path, args.N, args.M)
+        # Quantize image
+        adaptive_quantizer.encode_image()
+        adaptive_quantizer.decode_binary()
+        # Save files, if required
+        if args.save_results:
+            adaptive_quantizer.save_binary_file()
+            adaptive_quantizer.save_quantized_image()
+        # Display image comparison
+        psnr_meter = PSNR_Evaluation()
+        psnr_meter.display_comparison(adaptive_quantizer.image, adaptive_quantizer.quantized_image, adaptive_quantizer.bitstring, "Adaptive Quantizer")
+    ##### Perform global evaluation    
+    else:
+        # Define parameters values
+        M_values = np.array([2, 4, 8, 16])
+        N_values = np.array([4, 8, 16, 32])
+        # Innstantiate PSNR meter
+        psnr_meter = PSNR_Evaluation()
+        # Quantize and compute metrics from multiple combinations
+        for M in M_values:
+            for N in N_values:
+                # Quantize image.
+                binary_file_path    = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N={N}_M={M}.bin')
+                rec_image_file_path = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N={N}_M={M}_rec.png')
+                adaptive_quantizer = CIQA(args.image_to_quantize, binary_file_path, rec_image_file_path, N, M)
+                adaptive_quantizer.encode_image()
+                adaptive_quantizer.decode_binary()
+                if args.save_results:
+                    adaptive_quantizer.save_binary_file()
+                    adaptive_quantizer.save_quantized_image()
+                # Include results to the PSNR meter
+                psnr_meter.get_img_pairs_and_bitstring(adaptive_quantizer.image, adaptive_quantizer.quantized_image, adaptive_quantizer.bitstring, N, M)
+        # Plot points and RD curve.               
+        psnr_meter.plot_rd_curve("Adaptive Quantizer", os.path.basename(args.image_to_quantize))
