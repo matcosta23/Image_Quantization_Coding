@@ -41,9 +41,10 @@ class CIVQ(common_classes.LossyCompression):
 
     def _generate_codebook_and_quantize(self):
         ##### Instantiate and run clustering algorithm.
-        clustering = KMeans(n_clusters=self.M).fit(self.patches)
-        self.codebook = clustering.cluster_centers_
-        self.indexes = clustering.predict(self.patches)
+        LBG = LBG_Algorithm(n_clusters=self.M)
+        LBG.fit(self.patches)
+        self.codebook = LBG.cluster_centers_
+        self.indexes = LBG.predict(self.patches)
         return
 
 
@@ -120,6 +121,82 @@ class CIVQ(common_classes.LossyCompression):
         for v in range(self.patch_dims[0]):
             for h in range(self.patch_dims[1]):
                 self.quantized_image[v * self.N: (v + 1) * self.N, h * self.N: (h + 1) * self.N] = patches[v, h]
+        return
+
+
+
+class LBG_Algorithm(): 
+
+    def __init__(self, n_clusters):
+        self.n_clusters = n_clusters
+
+
+    def fit(self, data): 
+        ##### Save data
+        self.data = np.expand_dims(data, axis=1)
+        ##### Initialize with only one vector.
+        self._initialize()
+        ##### Increase clusters and optimize.
+        while 2 * len(self.cluster_centers_) <= self.n_clusters:
+            self._duplicate_clusters()
+            self._optimize_clusters()
+        ##### Check if there are remaining clusters to be created.
+        if self.n_clusters > len(self.cluster_centers_):
+            self._create_remaining_clusters()
+            self._optimize_clusters()
+        return
+
+
+    def predict(self, test_data):
+        self.data = np.expand_dims(test_data, axis=1)
+        self._compute_indexes()
+        return self.map_indexes
+        
+
+    def _initialize(self):
+        self.cluster_centers_ = np.mean(self.data, axis=0)
+        return
+
+
+    def _duplicate_clusters(self):
+        ##### Generate new centers
+        new_centers = self.cluster_centers_ + np.random.uniform(low=-1, high=1, size=self.cluster_centers_.shape)
+        self.cluster_centers_ = np.vstack((self.cluster_centers_, new_centers))
+        return
+
+
+    def _create_remaining_clusters(self):
+        clusters_to_create = self.n_clusters - len(self.cluster_centers_)
+        ##### Get clusters with a larger number of vectors
+        self._compute_indexes()
+        unique_indexes, counts = np.unique(self.map_indexes, return_counts=True)
+        populated_clusters = self.cluster_centers_[unique_indexes[np.argsort(counts)[-1]]]
+        ##### Create new centers
+        new_centers = populated_clusters + np.random.uniform(low=-0.1, high=0.1, size=populated_clusters.shape)
+        self.cluster_centers_ = np.vstack((self.cluster_centers_, new_centers))
+        return
+
+    
+    def _optimize_clusters(self):
+        centers_to_update = True
+        while centers_to_update:
+            ##### Get indexes associated with current centers
+            self._compute_indexes()
+            ##### Update centers
+            new_centers = np.vstack(list(map(lambda idx: np.mean(self.data[self.map_indexes == idx], axis=0), range(len(self.cluster_centers_)))))
+            ##### Verify if centers have changed considerably
+            centers_diff = self.cluster_centers_ - new_centers
+            if (centers_diff.min() > -0.01) and (centers_diff.max() < 0.01):
+                centers_to_update = False
+            self.cluster_centers_ = new_centers
+        return
+
+
+    def _compute_indexes(self):
+        ##### Compute euclidean distance
+        euclidean_dist = np.linalg.norm(np.subtract(np.repeat(self.data, len(self.cluster_centers_), axis=1), self.cluster_centers_), axis=2)
+        ##### Get index of associated vectors
+        self.map_indexes = np.argsort(euclidean_dist)[:, 0]
         return
 
 
