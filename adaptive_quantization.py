@@ -102,9 +102,9 @@ if __name__ == "__main__":
     ##### Create directories
     args.binaries_folder, args.quantized_folder, args.metrics_folder = common_classes.create_folders(args, "Adaptive")
     ##### Verify hyper-parameters values
-    if args.M > 16:
+    if (args.M is not None) and (args.M > 16):
         raise ValueError("Quantization supports only up to 16 levels (M parameter).")
-    if args.N > 32:
+    if (args.N is not None) and (args.N > 32):
         raise ValueError("The maximum dimension for the square block is 32 pixels (N parameter).")
     ##### Verify if only one or all points should be runned.
     if args.global_evaluation is False:
