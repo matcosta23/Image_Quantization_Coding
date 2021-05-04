@@ -4,3 +4,6 @@ Image_Database/
 __pycache__/
 kodim03.bin
 peppers.bin
+Binaries_*
+Metrics_*
+Quantized_*

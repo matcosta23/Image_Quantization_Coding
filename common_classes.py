@@ -5,6 +5,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 from PIL import Image
+from pathlib import Path
 from bitstring import BitStream
 
 from metrics_evaluation import Distortion_Evaluation
@@ -102,41 +103,45 @@ def read_arguments():
     parser = argparse.ArgumentParser(description="Receives arguments for quantization.")
     ##### Define arguments.
     parser.add_argument('--image_to_quantize', required=True, help='Path to original image.')
+    parser.add_argument('--N', required=False, type=int, help="Value for N hyper-parameter.")
+    parser.add_argument('--M', required=False, type=int, help="Value for M hyper-parameter.")
     parser.add_argument('-g', '--global_evaluation', action='store_true', help='If set, all hyper-parameter combinations are compared.')
     parser.add_argument('-s', '--save_results', action='store_true', help='If set, results are saved on output paths.')
-    parser.add_argument('--N', required=False, type=int, help="Value for N hyper-parameter.")
-    parser.add_argument('--M', required=True, type=int, help="Value for M hyper-parameter.")
     parser.add_argument('--binaries_folder', required=False, help='Folder to save binaries. '
                                                                   "Only used if '-s' flag is set.")
     parser.add_argument('--quantized_folder', required=False, help='Folder to save quantized images. '
                                                                    "Only used if '-s' flag is set.")
+    parser.add_argument('--metrics_folder', required=False, help='Folder to save global evaluation metrics. '
+                                                                 "Only used if '-s' flag is set.")
     ##### Return namespace.
     return parser.parse_args(sys.argv[1:])
 
 
 
-def create_folders(binaries_folder, quantized_folder, quantizer_id, save_results):
+def create_folders(args, quantizer_id):
     ##### Verify if user has provided destiny folders.
-    if binaries_folder is None: 
-        binaries_folder = "Binaries_" + quantizer_id
-    if quantized_folder is None:
-        quantized_folder = "Quantized_" + quantizer_id
+    args.binaries_folder = Path("Binaries_" + quantizer_id) if args.binaries_folder is None else Path(args.binaries_folder)
+    args.quantized_folder = Path("Quantized_" + quantizer_id) if args.quantized_folder is None else Path(args.quantized_folder)
+    args.metrics_folder = Path("Metrics_" + quantizer_id) if args.metrics_folder is None else Path(args.metrics_folder)
     ##### Create folders
-    if save_results:
-        if not binaries_folder.exists():
-            binaries_folder.mkdir(parents=True)
-        if not quantized_folder.exists():
-            quantized_folder.mkdir(parents=True)
-    return binaries_folder, quantized_folder
+    if args.save_results:
+        if not args.binaries_folder.exists():
+            args.binaries_folder.mkdir(parents=True)
+        if not args.quantized_folder.exists():
+            args.quantized_folder.mkdir(parents=True)
+    if args.global_evaluation:
+        if not args.metrics_folder.exists():
+            args.metrics_folder.mkdir(parents=True)
+    return args.binaries_folder, args.quantized_folder, args.metrics_folder
 
 
 
-def evaluate_one_point(args, ModelClass, model_id):
+def evaluate_one_point(args, N, M, ModelClass, model_id, display_metrics=True):
     # Define output paths
-    binary_file_path    = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '.bin')
-    rec_image_file_path = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_rec.png')
+    binary_file_path    = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N{N}_M{M}.bin')
+    rec_image_file_path = os.path.join(args.quantized_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N{N}_M{M}_rec.png')
     # Instantiate Model
-    quantizer = ModelClass(args.image_to_quantize, binary_file_path, rec_image_file_path, args.N, args.M)
+    quantizer = ModelClass(args.image_to_quantize, binary_file_path, rec_image_file_path, N, M)
     # Quantize image
     quantizer.encode_image()
     quantizer.decode_binary()
@@ -144,10 +149,14 @@ def evaluate_one_point(args, ModelClass, model_id):
     if args.save_results:
         quantizer.save_binary_file()
         quantizer.save_quantized_image()
-    # Display image comparison
-    distortion_meter = Distortion_Evaluation()
-    distortion_meter.display_comparison(quantizer.image, [quantizer.quantized_image], [quantizer.bitstring], model_id)
-    return
+    # Verify if results should be displayed or stored.
+    if display_metrics:
+        distortion_meter = Distortion_Evaluation()
+        distortion_meter.display_comparison(quantizer.image, [quantizer.quantized_image], [quantizer.bitstring], model_id)
+        return
+    # Otherwise, the results can be obtained from the quantizer object.
+    else:
+        return quantizer
 
 
 
@@ -158,17 +167,14 @@ def global_evaluation(args, N_values, M_values, ModelClass, quantizer_id):
     for M in M_values:
         for N in N_values:
             # Quantize image.
-            binary_file_path    = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N={N}_M={M}.bin')
-            rec_image_file_path = os.path.join(args.binaries_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + f'_N={N}_M={M}_rec.png')
-            quantizer = ModelClass(args.image_to_quantize, binary_file_path, rec_image_file_path, N, M)
-            quantizer.encode_image()
-            quantizer.decode_binary()
-            if args.save_results:
-                quantizer.save_binary_file()
-                quantizer.save_quantized_image()
+            quantizer = evaluate_one_point(args, N, M, ModelClass, quantizer_id, display_metrics=False)
             # Include results to the PSNR meter
             distortion_meter.get_img_pairs_and_bitstring(quantizer.image, quantizer.quantized_image, quantizer.bitstring, N, M)
             # Signalize end of quantization.
             print(f"--------------------\n End of quantization with parameters 'N'={N} and 'M'={M}.\n--------------------\n")
-    # Plot points and RD curve.               
-    distortion_meter.plot_rd_curve(quantizer_id, os.path.basename(args.image_to_quantize))
+    # Plot points and MSE scatter plot.               
+    distortion_meter.plot_mse_scatter(quantizer_id, os.path.basename(args.image_to_quantize))
+    # Save computed metrics.
+    if args.save_results:
+        csv_file_path = os.path.join(args.metrics_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + "_metrics.csv")
+        distortion_meter.save_results(csv_file_path)

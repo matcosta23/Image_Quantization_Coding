@@ -56,7 +56,7 @@ if __name__ == "__main__":
     ##### Read arguments from command line
     args = common_classes.read_arguments()
     ##### Create directories
-    args.binaries_folder, args.quantized_folder = common_classes.create_folders(args.binaries_folder, args.quantized_folder, "Color_Map", args.save_results)
+    args.binaries_folder, args.quantized_folder, args.metrics_folder = common_classes.create_folders(args, "Color_Map")
     ##### Define possible parameters
     M_values = np.array([16, 32, 64, 128, 256])
     ##### Verify if multiple or single points should be executed
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         if args.M not in M_values:
             raise ValueError(f"The codebook length 'M' must be one of these values: {list(M_values)}")
         # Evaluate point
-        common_classes.evaluate_one_point(args, CIMap, "Color Map Quantizer")
+        common_classes.evaluate_one_point(args, 3, args.M, CIMap, "Color Map Quantizer")
     else:
         ##### Global evaluation. 'N_values' should receive any list with only one value.
         common_classes.global_evaluation(args, [3], M_values, CIMap, "Color Map Quantizer")

@@ -185,8 +185,8 @@ class LBG_Algorithm():
             ##### Update centers
             new_centers = np.vstack(list(map(lambda idx: np.mean(self.data[self.map_indexes == idx], axis=0), range(len(self.cluster_centers_)))))
             ##### Verify if centers have changed considerably
-            centers_diff = self.cluster_centers_ - new_centers
-            if (centers_diff.min() > -0.01) and (centers_diff.max() < 0.01):
+            centers_diff = np.abs(self.cluster_centers_ - new_centers)
+            if centers_diff.max() < 0.1:
                 centers_to_update = False
             self.cluster_centers_ = new_centers
         return
@@ -205,7 +205,7 @@ if __name__ == "__main__":
     ##### Read arguments from command line
     args = common_classes.read_arguments()
     ##### Create directories
-    args.binaries_folder, args.quantized_folder = common_classes.create_folders(args.binaries_folder, args.quantized_folder, "Vector", args.save_results)
+    args.binaries_folder, args.quantized_folder, args.metrics_folder = common_classes.create_folders(args, "Vector")
     ##### Define possible parameters
     N_values = np.array([2, 4, 8, 16])
     M_values = np.array([32, 64, 128, 256])
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         if args.M not in M_values:
             raise ValueError(f"The codebook length 'M' must be one of these values: {list(M_values)}")
         # Evaluate point
-        common_classes.evaluate_one_point(args, CIVQ, "Vector Quantizer")
+        common_classes.evaluate_one_point(args, args.N, args.M, CIVQ, "Vector Quantizer")
     else:
         ##### Global evaluation.
         common_classes.global_evaluation(args, N_values, M_values, CIVQ, "Vector Quantizer")

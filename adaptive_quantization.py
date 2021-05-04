@@ -100,7 +100,7 @@ if __name__ == "__main__":
     ##### Read arguments from command line
     args = common_classes.read_arguments()
     ##### Create directories
-    args.binaries_folder, args.quantized_folder = common_classes.create_folders(args.binaries_folder, args.quantized_folder, "Adaptive", args.save_results)
+    args.binaries_folder, args.quantized_folder, args.metrics_folder = common_classes.create_folders(args, "Adaptive")
     ##### Verify hyper-parameters values
     if args.M > 16:
         raise ValueError("Quantization supports only up to 16 levels (M parameter).")
@@ -108,11 +108,11 @@ if __name__ == "__main__":
         raise ValueError("The maximum dimension for the square block is 32 pixels (N parameter).")
     ##### Verify if only one or all points should be runned.
     if args.global_evaluation is False:
-        common_classes.evaluate_one_point(args, CIQA, "Adaptive Quantizer")
+        common_classes.evaluate_one_point(args, args.N, args.M, CIQA, "Adaptive Quantizer")
     ##### Perform global evaluation    
     else:
         # Define parameters values
-        N_values = np.array([4, 8])#, 16, 32])
-        M_values = np.array([2, 4])#, 8, 16])
+        N_values = np.array([4, 8, 16, 32])
+        M_values = np.array([2, 4, 8, 16])
         # Global evaluation
         common_classes.global_evaluation(args, N_values, M_values, CIQA, "Adaptive Quantizer")
