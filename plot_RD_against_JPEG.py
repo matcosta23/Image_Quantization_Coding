@@ -47,7 +47,7 @@ if __name__ == "__main__":
     for binary_path in glob(args.binaries_glob):
         # Read PSNR and BPP from csv.
         binary_file_name = os.path.splitext(os.path.basename(binary_path))[0]
-        image_name, N, M = binary_file_name.split('_')
+        _, N, M = binary_file_name.rsplit('_', 2)
         N = int(N[1:])
         M = int(M[1:])
         try:
@@ -72,12 +72,17 @@ if __name__ == "__main__":
         except IndexError:
             pass 
 
+    ##### Sort results
+    model_bpp, model_psnr = np.split(np.array(sorted(zip(model_bpp, model_psnr))), 2, axis=1)
+    jpeg_bpp, jpeg_psnr = np.split(np.array(sorted(zip(jpeg_bpp, jpeg_psnr))), 2, axis=1)
+
     ##### Plot RD curve
     plt.plot(model_bpp, model_psnr, color='darkred', marker='*', label="Proposed Quantizer")
     plt.plot(jpeg_bpp, jpeg_psnr, color='royalblue', marker='^', label="JPEG")
     plt.title('RD Curve')
     plt.xlabel('BPP'), plt.ylabel('PSNR')
-    plt.grid(), plt.legend(), plt.tight_layout()
-    plt.show()
-    ##### Save results inside destiny folder.
+    plt.grid(), plt.legend(loc='lower right'), plt.tight_layout()
+    ##### Save results inside destiny folder
     plt.savefig(os.path.join(args.jpg_folder, image_name + '_RD_plot.pdf'), target='pdf')
+    ##### Show curve
+    plt.show()
