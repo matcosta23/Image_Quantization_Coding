@@ -60,7 +60,7 @@ class Distortion_Evaluation():
         self.results.append([psnr, mse, bpp, N, M])
 
 
-    def plot_mse_scatter(self, quantizer_id, img_name):
+    def plot_mse_scatter(self, quantizer_id, img_name, plot_file_path=None):
         ##### Choose lower convex hull.
         # Sort results by bpp.
         self.results = np.array(self.results)
@@ -88,7 +88,11 @@ class Distortion_Evaluation():
         legends = list(map(lambda parameters: f"N={int(parameters[0])}; M={int(parameters[1])}", sorted_results[:, 3:]))
         plt.legend(scatters, legends, ncol=3, fontsize=7)
         ##### Plot Image
+        plt.grid(), plt.tight_layout()
         plt.show()
+        ##### Save Image
+        if plot_file_path is not None:
+            plt.savefig(plot_file_path, target='pdf')
         return
 
 

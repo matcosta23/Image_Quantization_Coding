@@ -172,8 +172,11 @@ def global_evaluation(args, N_values, M_values, ModelClass, quantizer_id):
             distortion_meter.get_img_pairs_and_bitstring(quantizer.image, quantizer.quantized_image, quantizer.bitstring, N, M)
             # Signalize end of quantization.
             print(f"--------------------\n End of quantization with parameters 'N'={N} and 'M'={M}.\n--------------------\n")
+    # Verify if scatter plot should be saved.
+    scatter_path = os.path.join(args.metrics_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + "_scatter.pdf") \
+        if args.save_results else None
     # Plot points and MSE scatter plot.               
-    distortion_meter.plot_mse_scatter(quantizer_id, os.path.basename(args.image_to_quantize))
+    distortion_meter.plot_mse_scatter(quantizer_id, os.path.basename(args.image_to_quantize), scatter_path)
     # Save computed metrics.
     if args.save_results:
         csv_file_path = os.path.join(args.metrics_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + "_metrics.csv")
