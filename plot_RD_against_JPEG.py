@@ -47,7 +47,7 @@ if __name__ == "__main__":
     for binary_path in glob(args.binaries_glob):
         # Read PSNR and BPP from csv.
         binary_file_name = os.path.splitext(os.path.basename(binary_path))[0]
-        N, M = binary_file_name.split('_')[-2:]
+        image_name, N, M = binary_file_name.split('_')
         N = int(N[1:])
         M = int(M[1:])
         try:
@@ -79,3 +79,5 @@ if __name__ == "__main__":
     plt.xlabel('BPP'), plt.ylabel('PSNR')
     plt.grid(), plt.legend(), plt.tight_layout()
     plt.show()
+    ##### Save results inside destiny folder.
+    plt.savefig(os.path.join(args.jpg_folder, image_name + '_RD_plot.pdf'), target='pdf')
