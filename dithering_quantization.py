@@ -4,6 +4,7 @@ import argparse
 import itertools
 import numpy as np
 from PIL import Image
+from pathlib import Path
 
 from metrics_evaluation import Distortion_Evaluation
 
@@ -115,16 +116,14 @@ if __name__ == "__main__":
     ##### Create folders, define output paths and save files. 
     if args.save_results:
         # Uniform Quantization
-        if args.uniform_folder is None: 
-            args.uniform_folder = "Uniform_Quantization"
+        args.uniform_folder = Path("Uniform_Quantization") if args.uniform_folder is None else Path(args.uniform_folder)
         if not args.uniform_folder.exists():
             args.uniform_folder.mkdir(parents=True)
         uniform_img_path = os.path.join(args.uniform_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_uniform.png')
         pil_img = Image.fromarray(floyd_steinberg_filter.quantized_image)
         pil_img.save(uniform_img_path)
         # Dithering Image
-        if args.dithering_folder is None:
-            args.dithering_folder = "Dithering_Images"
+        args.dithering_folder = Path("Dithering_Images") if args.dithering_folder is None else Path(args.dithering_folder)
         if not args.dithering_folder.exists():
             args.dithering_folder.mkdir(parents=True)
         dithering_img_path = os.path.join(args.dithering_folder, os.path.splitext(os.path.basename(args.image_to_quantize))[0] + '_dithering.png')
