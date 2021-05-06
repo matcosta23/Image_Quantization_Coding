@@ -133,7 +133,7 @@ class LBG_Algorithm():
 
     def fit(self, data): 
         ##### Save data
-        self.data = np.expand_dims(data, axis=1)
+        self.data = np.expand_dims(data, axis=1).astype(np.int64)
         ##### Initialize with only one vector.
         self._initialize()
         ##### Increase clusters and optimize.
@@ -172,7 +172,7 @@ class LBG_Algorithm():
         unique_indexes, counts = np.unique(self.map_indexes, return_counts=True)
         populated_clusters = self.cluster_centers_[unique_indexes[np.argsort(counts)[-1]]]
         ##### Create new centers
-        new_centers = populated_clusters + np.random.uniform(low=-0.1, high=0.1, size=populated_clusters.shape)
+        new_centers = populated_clusters + np.random.uniform(low=-0.3, high=0.3, size=populated_clusters.shape)
         self.cluster_centers_ = np.vstack((self.cluster_centers_, new_centers))
         return
 
@@ -184,9 +184,19 @@ class LBG_Algorithm():
             self._compute_indexes()
             ##### Update centers
             new_centers = np.vstack(list(map(lambda idx: np.mean(self.data[self.map_indexes == idx], axis=0), range(len(self.cluster_centers_)))))
+            ##### Deal with empty cell problem
+            if np.isnan(new_centers).any():
+                # Get nan indexes.
+                nan_indexes = np.sum(np.isnan(new_centers), axis=1).astype(bool)
+                nan_amount = np.sum(nan_indexes)
+                # Get centers with grestest amount of associated vectors.
+                greatest_indexes = np.flip(np.argsort(np.array(np.unique(self.map_indexes, return_counts=True))[1, :]))[:nan_amount]
+                # Assign more populated vectors with little distortion.
+                most_populated_centers = self.cluster_centers_[greatest_indexes]
+                new_centers[nan_indexes] = most_populated_centers + np.random.uniform(low=-0.3, high=0.3, size=most_populated_centers.shape)
             ##### Verify if centers have changed considerably
             centers_diff = np.abs(self.cluster_centers_ - new_centers)
-            if centers_diff.max() < 0.1:
+            if centers_diff.max() < 0.3:
                 centers_to_update = False
             self.cluster_centers_ = new_centers
         return
