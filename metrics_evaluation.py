@@ -90,7 +90,7 @@ class Distortion_Evaluation():
         plt.grid(), plt.tight_layout()
         ##### Save Image
         if plot_file_path is not None:
-            plt.savefig(plot_file_path, target='pdf')
+            plt.savefig(plot_file_path, format='pdf')
         ##### Plot Image
         plt.show()
         return

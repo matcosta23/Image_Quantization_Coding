@@ -83,6 +83,6 @@ if __name__ == "__main__":
     plt.xlabel('BPP'), plt.ylabel('PSNR')
     plt.grid(), plt.legend(loc='lower right'), plt.tight_layout()
     ##### Save results inside destiny folder
-    plt.savefig(os.path.join(args.jpg_folder, image_name + '_RD_plot.pdf'), target='pdf')
+    plt.savefig(os.path.join(args.jpg_folder, image_name + '_RD_plot.pdf'), format='pdf')
     ##### Show curve
     plt.show()
