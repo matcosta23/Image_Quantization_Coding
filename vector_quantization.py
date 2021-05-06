@@ -160,7 +160,7 @@ class LBG_Algorithm():
 
     def _duplicate_clusters(self):
         ##### Generate new centers
-        new_centers = self.cluster_centers_ + np.random.uniform(low=-1, high=1, size=self.cluster_centers_.shape)
+        new_centers = self.cluster_centers_ + np.random.uniform(low=-0.3, high=0.3, size=self.cluster_centers_.shape)
         self.cluster_centers_ = np.vstack((self.cluster_centers_, new_centers))
         return
 
